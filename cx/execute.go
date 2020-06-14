@@ -256,7 +256,6 @@ func (cxt *CXProgram) RunCompiled(nCalls int, args []string) error {
 
 	}
 	return err
-
 }
 
 func (call *CXCall) ccall(prgrm *CXProgram) error {
@@ -314,6 +313,11 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 			}
 			call.Line++
 		} else if expr.Operator.IsNative {
+			// go func() {
+			// 	execNative(prgrm)
+			// }()
+			// call.Line++
+
 			execNative(prgrm)
 			call.Line++
 		} else {
@@ -336,8 +340,10 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 			prgrm.StackPointer += newCall.Operator.Size
 
 			// checking if enough memory in stack
-			if prgrm.StackPointer > STACK_SIZE {
-				panic(STACK_OVERFLOW_ERROR)
+			if prgrm.StackPointer > prgrm.StackCeiling {
+				// Trying to expand current thread's stack.
+				Debug("oops")
+				prgrm.ExpandStack()
 			}
 
 			fp := call.FramePointer

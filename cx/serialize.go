@@ -455,10 +455,10 @@ func serializeProgram(prgrm *CXProgram, s *sAll) {
 	sPrgrm.MemoryOffset = int32(0)
 	sPrgrm.MemorySize = int32(len(PROGRAM.Memory))
 
-	sPrgrm.HeapPointer = int32(prgrm.HeapPointer)
+	sPrgrm.HeapPointer = int32(*prgrm.HeapPointer)
 	sPrgrm.StackPointer = int32(prgrm.StackPointer)
 	sPrgrm.StackSize = int32(prgrm.StackSize)
-	sPrgrm.HeapSize = int32(prgrm.HeapSize)
+	sPrgrm.HeapSize = int32(*prgrm.HeapSize)
 	sPrgrm.HeapStartsAt = int32(prgrm.HeapStartsAt)
 
 	sPrgrm.Terminated = serializeBoolean(prgrm.Terminated)
@@ -1175,9 +1175,11 @@ func initDeserialization(prgrm *CXProgram, s *sAll) {
 	prgrm.Packages = make([]*CXPackage, len(s.Packages))
 	prgrm.CallStack = make([]CXCall, CALLSTACK_SIZE)
 	prgrm.HeapStartsAt = int(s.Program.HeapStartsAt)
-	prgrm.HeapPointer = int(s.Program.HeapPointer)
+	heapPointer := int(s.Program.HeapPointer)
+	prgrm.HeapPointer = &heapPointer
 	prgrm.StackSize = int(s.Program.StackSize)
-	prgrm.HeapSize = int(s.Program.HeapSize)
+	heapSize := int(s.Program.HeapSize)
+	prgrm.HeapSize = &heapSize
 	prgrm.BCPackageCount = int(s.Program.BCPackageCount)
 	prgrm.Version = dsName(s.Program.VersionOffset, s.Program.VersionSize, s)
 

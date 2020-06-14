@@ -358,7 +358,7 @@ func QueryProgram(fn *CXFunction, expr *CXExpression, prgrmOffsetB []byte, affOf
 	// Callcounter
 	WriteI32(prgrmOffset+OBJECT_HEADER_SIZE, int32(PROGRAM.CallCounter))
 	// HeapUsed
-	WriteI64(prgrmOffset+OBJECT_HEADER_SIZE+I32_SIZE, int64(PROGRAM.HeapPointer))
+	WriteI64(prgrmOffset+OBJECT_HEADER_SIZE+I32_SIZE, int64(*PROGRAM.HeapPointer))
 
 	// Caller
 	if PROGRAM.CallCounter != 0 {

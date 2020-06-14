@@ -2,6 +2,7 @@ package cxcore
 
 import (
 	"os"
+	"runtime"
 )
 
 // Initializing `CXProgram` structure where packages, structs, functions and
@@ -53,12 +54,14 @@ const FORWARDING_ADDRESS_SIZE = 4
 const OBJECT_SIZE = 4
 
 const CALLSTACK_SIZE = 1000
+const THREAD_STACK_SIZE = 8 * 1024 // 8 Kb
 
 var STACK_SIZE = 1048576     // 1 Mb
 var INIT_HEAP_SIZE = 2097152 // 2 Mb
 var MAX_HEAP_SIZE = 67108864 // 64 Mb
 var MIN_HEAP_FREE_RATIO float32 = 0.4
 var MAX_HEAP_FREE_RATIO float32 = 0.7
+var THREAD_POOL_SIZE = runtime.NumCPU() - 1 // -1 because of main thread.
 
 const NULL_HEAP_ADDRESS_OFFSET = 4
 const NULL_HEAP_ADDRESS = 0

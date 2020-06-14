@@ -1076,7 +1076,14 @@ func Run(args []string) {
 		}
 	}
 	if options.stackSize != "" {
-		STACK_SIZE = parseMemoryString(options.stackSize)
+		desiredStackSize := parseMemoryString(options.stackSize)
+		// Ensuring stack size is at least 8 kilobytes.
+		if desiredStackSize < 8 * 1024 {
+			STACK_SIZE = 8 * 1024
+		} else {
+			STACK_SIZE = desiredStackSize
+		}
+		// We'll start adding data after the stack.
 		DataOffset = STACK_SIZE
 	}
 	if options.minHeapFreeRatio != float64(0) {
@@ -1126,7 +1133,7 @@ func mergeBlockchainHeap(bcHeap, sPrgrm []byte) {
 		}
 	}
 	// Recalculating the heap size.
-	PRGRM.HeapSize = len(PRGRM.Memory) - PRGRM.HeapStartsAt
+	*PRGRM.HeapSize = len(PRGRM.Memory) - PRGRM.HeapStartsAt
 	txnDataLen := fullDataSegSize - GetSerializedDataSize(sPrgrm)
 	// TODO: CX chains only work with one package at the moment (in the blockchain code). That is what that "1" is for.
 	// Displacing the references to heap objects by `txnDataLen`.

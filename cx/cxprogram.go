@@ -25,20 +25,26 @@ type CXProgram struct {
 	// Contents
 	Packages []*CXPackage // Packages in a CX program
 
-	// Runtime information
+	// Runtime information.
+	// Those fields that are pointers to ints need
+	// to be pointers so `Threads` can share this modifiable information.
 	Inputs         []*CXArgument // OS input arguments
 	Outputs        []*CXArgument // outputs to the OS
 	Memory         []byte        // Used when running the program
+	HeapSize       *int          // This field stores the size of a CX program's heap
+	HeapPointer    *int          // At what offset a CX program can insert a new object to the heap
 	StackSize      int           // This field stores the size of a CX program's stack
-	HeapSize       int           // This field stores the size of a CX program's heap
 	HeapStartsAt   int           // Offset at which the heap starts in a CX program's memory
 	StackPointer   int           // At what byte the current stack frame is
+	StackFloor     int           // Thread's stack starts at this byte
+	StackCeiling   int           // After this point, the stack for this thread needs to be expanded
 	CallStack      []CXCall      // Collection of function calls
 	CallCounter    int           // What function call is the currently being executed in the CallStack
-	HeapPointer    int           // At what offset a CX program can insert a new object to the heap
 	Terminated     bool          // Utility field for the runtime. Indicates if a CX program has already finished or not.
 	BCPackageCount int           // In case of a CX chain, how many packages of this program are part of blockchain code.
 	Version        string        // CX version used to build this CX program.
+
+	Threads        []CXProgram  // 
 
 	// Used by the REPL and parser
 	CurrentPackage *CXPackage // Represents the currently active package in the REPL or when parsing a CX file.
@@ -54,16 +60,49 @@ type CXCall struct {
 // MakeProgram ...
 func MakeProgram() *CXProgram {
 	minHeapSize := minHeapSize()
+	heapPointer := NULL_HEAP_ADDRESS_OFFSET
 	newPrgrm := &CXProgram{
-		Packages:    make([]*CXPackage, 0),
-		CallStack:   make([]CXCall, CALLSTACK_SIZE),
-		Memory:      make([]byte, STACK_SIZE+minHeapSize),
-		StackSize:   STACK_SIZE,
-		HeapSize:    minHeapSize,
-		HeapPointer: NULL_HEAP_ADDRESS_OFFSET, // We can start adding objects to the heap after the NULL (nil) bytes.
+		Packages:     make([]*CXPackage, 0),
+		CallStack:    make([]CXCall, CALLSTACK_SIZE),
+		Memory:       make([]byte, STACK_SIZE+minHeapSize),
+		StackSize:    STACK_SIZE,
+		StackCeiling: THREAD_STACK_SIZE,
+		HeapSize:     &minHeapSize,
+		HeapPointer:  &heapPointer, // We can start adding objects to the heap after the NULL (nil) bytes.
+		Threads:      make([]CXProgram, THREAD_POOL_SIZE),
+	}
+
+	for _, thread := range newPrgrm.Threads {
+		thread.Packages = newPrgrm.Packages
+		thread.Inputs = newPrgrm.Inputs
+		thread.Outputs = newPrgrm.Outputs
+		// Different `CallStack` than to the main thread.
+		thread.CallStack = make([]CXCall, CALLSTACK_SIZE)
+		thread.Memory = newPrgrm.Memory
+		thread.HeapSize = newPrgrm.HeapSize
+		thread.HeapPointer = newPrgrm.HeapPointer
+		thread.Terminated = true
 	}
 
 	return newPrgrm
+}
+
+// MakeThread creates a copy of `prgrm`, which shares all its fields with `prgrm`
+// except its `CallStack`, which only includes the the last `CXCall`.
+func (prgrm *CXProgram) MakeThread() *CXProgram {
+	thread := CXProgram{}
+
+	thread.Path = prgrm.Path
+	thread.Packages = prgrm.Packages
+	thread.Inputs = prgrm.Inputs
+	thread.Outputs = prgrm.Outputs
+	thread.Memory = prgrm.Memory
+	thread.HeapSize = prgrm.HeapSize
+	thread.StackSize = prgrm.StackSize
+
+	// thread.StackFloor, thread.StackCeiling = AllocateStack(prgrm)
+
+	return &thread
 }
 
 // ----------------------------------------------------------------
