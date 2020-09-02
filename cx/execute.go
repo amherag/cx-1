@@ -59,13 +59,32 @@ func (cxt *CXProgram) ToCall() *CXExpression {
 	// panic("")
 }
 
+// func (cxt *CXProgram) GetCall()
+
 // Run ...
 func (cxt *CXProgram) Run(untilEnd bool, nCalls *int, untilCall int) error {
 	defer RuntimeError()
 	var err error
 
+	// // Checking if expression is a goroutine.
+	// // Getting expression that will be executed.
+	// expr := cxt.GetExpr()
+	// if expr.IsGoRoutine {
+	// 	thread := cxt.Threads[cxt.ThreadCount]
+	// 	thread.Terminated = false
+	// 	cxt.ThreadCount++
+
+	// 	thread.StackFloor, thread.StackCeiling = AllocateStack(THREAD_STACK_SIZE)
+	// 	// It's a new thread (no data has been
+	// 	// written), so `StackPointer` is the same as the `StackFloor`
+	// 	thread.StackPointer = thread.StackFloor
+
+	// 	thread.CallFloor, thread.CallCeiling = AllocateCallStack(THREAD_CALLSTACK_SIZE)
+	// }
+
 	for !cxt.Terminated && (untilEnd || *nCalls != 0) && cxt.CallCounter > untilCall {
-		call := &cxt.CallStack[cxt.CallCounter]
+		// call := &cxt.CallStack[cxt.CallCounter]
+		call := cxt.GetCall(true)
 
 		// checking if enough memory in stack
 		if cxt.StackPointer > STACK_SIZE {
@@ -133,10 +152,10 @@ func minHeapSize() int {
 		// Then MAX_HEAP_SIZE overrides INIT_HEAP_SIZE's value.
 		minHeapSize = MAX_HEAP_SIZE
 	}
-	if minHeapSize < NULL_HEAP_ADDRESS_OFFSET {
+	if minHeapSize < THREAD_STACK_SIZE {
 		// Then the user is trying to allocate too little heap memory.
-		// We need at least NULL_HEAP_ADDRESS_OFFSET bytes for `nil`.
-		minHeapSize = NULL_HEAP_ADDRESS_OFFSET
+		// We need at least THREAD_STACK_SIZE bytes for `nil`.
+		minHeapSize = THREAD_STACK_SIZE
 	}
 
 	return minHeapSize
@@ -166,112 +185,122 @@ func (cxt *CXProgram) RunCompiled(nCalls int, args []string) error {
 		untilEnd = true
 	}
 	mod, err := cxt.SelectPackage(MAIN_PKG)
-	if err == nil {
-		// initializing program resources
-		// prgrm.Stacks = append(prgrm.Stacks, MakeStack(1024))
+	if err != nil {
+		return err
+	}
 
-		if cxt.CallStack[0].Operator == nil {
-			// then the program is just starting and we need to run the SYS_INIT_FUNC
-			if fn, err := mod.SelectFunction(SYS_INIT_FUNC); err == nil {
-				// *init function
-				mainCall := MakeCall(fn)
-				cxt.CallStack[0] = mainCall
-				cxt.StackPointer = fn.Size
-
-				var err error
-
-				for !cxt.Terminated {
-					call := &cxt.CallStack[cxt.CallCounter]
-					err = call.ccall(cxt)
-					if err != nil {
-						return err
-					}
-				}
-				// we reset call state
-				cxt.Terminated = false
-				cxt.CallCounter = 0
-				cxt.CallStack[0].Operator = nil
-			} else {
-				return err
-			}
-		}
-
-		if fn, err := mod.SelectFunction(MAIN_FUNC); err == nil {
-			if len(fn.Expressions) < 1 {
-				return nil
-			}
-
-			if cxt.CallStack[0].Operator == nil {
-				// main function
-				mainCall := MakeCall(fn)
-				mainCall.FramePointer = cxt.StackPointer
-				// initializing program resources
-				cxt.CallStack[0] = mainCall
-
-				// prgrm.Stacks = append(prgrm.Stacks, MakeStack(1024))
-				cxt.StackPointer += fn.Size
-
-				// feeding os.Args
-				if osPkg, err := PROGRAM.SelectPackage(OS_PKG); err == nil {
-					argsOffset := 0
-					if osGbl, err := osPkg.GetGlobal(OS_ARGS); err == nil {
-						for _, arg := range args {
-							argBytes := encoder.Serialize(arg)
-							argOffset := AllocateSeq(len(argBytes) + OBJECT_HEADER_SIZE)
-
-							var header = make([]byte, OBJECT_HEADER_SIZE)
-							WriteMemI32(header, 5, int32(encoder.Size(arg)+OBJECT_HEADER_SIZE))
-							obj := append(header, argBytes...)
-
-							WriteMemory(argOffset, obj)
-
-							var argOffsetBytes [4]byte
-							WriteMemI32(argOffsetBytes[:], 0, int32(argOffset))
-							argsOffset = WriteToSlice(argsOffset, argOffsetBytes[:])
-						}
-						WriteI32(GetFinalOffset(0, osGbl), int32(argsOffset))
-					}
-				}
-				cxt.Terminated = false
-			}
-
-			if err = cxt.Run(untilEnd, &nCalls, -1); err != nil {
-				return err
-			}
-
-			if cxt.Terminated {
-				cxt.Terminated = false
-				cxt.CallCounter = 0
-				cxt.CallStack[0].Operator = nil
-			}
-
-			// debugging memory
-			// if len(cxt.Memory) < 2000 {
-			// 	fmt.Println("prgrm.Memory", cxt.Memory)
-			// }
-
+	if cxt.CallStack[0].Operator == nil {
+		// then the program is just starting and we need to run the SYS_INIT_FUNC
+		fn, err := mod.SelectFunction(SYS_INIT_FUNC)
+		if err != nil {
 			return err
 		}
-		return err
+		// *init function
+		mainCall := MakeCall(fn)
+		cxt.CallStack[0] = mainCall
+		cxt.StackPointer = fn.Size
 
+		for !cxt.Terminated {
+			call := &cxt.CallStack[cxt.CallCounter]
+			err := call.ccall(cxt)
+			if err != nil {
+				return err
+			}
+		}
+		// we reset call state
+		cxt.Terminated = false
+		cxt.CallCounter = 0
+		cxt.CallStack[0].Operator = nil
 	}
-	return err
+
+	fn, err := mod.SelectFunction(MAIN_FUNC)
+	if err != nil {
+		return err
+	}
+
+	if len(fn.Expressions) < 1 {
+		return nil
+	}
+
+	if cxt.CallStack[0].Operator == nil {
+		// main function
+		mainCall := MakeCall(fn)
+		mainCall.FramePointer = cxt.StackPointer
+		// initializing program resources
+		cxt.CallStack[0] = mainCall
+
+		// prgrm.Stacks = append(prgrm.Stacks, MakeStack(1024))
+		cxt.StackPointer += fn.Size
+
+		// feeding os.Args
+		osPkg, err := PROGRAM.SelectPackage(OS_PKG)
+		if err == nil {
+			argsOffset := 0
+
+			osGbl, err := osPkg.GetGlobal(OS_ARGS)
+			if err != nil {
+				return err
+			}
+			
+			for _, arg := range args {
+				argBytes := encoder.Serialize(arg)
+				argOffset := AllocateSeq(len(argBytes) + OBJECT_HEADER_SIZE)
+
+				var header = make([]byte, OBJECT_HEADER_SIZE)
+				WriteMemI32(header, 5, int32(encoder.Size(arg)+OBJECT_HEADER_SIZE))
+				obj := append(header, argBytes...)
+
+				WriteMemory(argOffset, obj)
+
+				var argOffsetBytes [4]byte
+				WriteMemI32(argOffsetBytes[:], 0, int32(argOffset))
+				argsOffset = WriteToSlice(argsOffset, argOffsetBytes[:])
+			}
+			WriteI32(GetFinalOffset(0, osGbl), int32(argsOffset))
+		}
+
+		cxt.Terminated = false
+	}
+
+	if err = cxt.Run(untilEnd, &nCalls, -1); err != nil {
+		return err
+	}
+
+	if cxt.Terminated {
+		cxt.Terminated = false
+		cxt.CallCounter = 0
+		cxt.CallStack[0].Operator = nil
+	}
+
+	return nil
 }
 
 func (call *CXCall) ccall(prgrm *CXProgram) error {
-	// CX is still single-threaded, so only one stack
 	if call.Line >= call.Operator.Length {
 		/*
 		   popping the stack
 		*/
 		// going back to the previous call
-		prgrm.CallCounter--
-		if prgrm.CallCounter < 0 {
+		var callCounter *int
+		callCounter = prgrm.GetCallCounter()
+		*callCounter--
+		callFloor := prgrm.GetThreadCallFloor()
+
+		if *callCounter < callFloor {
 			// then the program finished
-			prgrm.Terminated = true
+			thread := prgrm.GetThread()
+			if thread != nil {
+				thread.Terminated = true
+				prgrm.CompactThreads()
+			} else {
+				prgrm.Terminated = true
+			}
 		} else {
 			// copying the outputs to the previous stack frame
-			returnAddr := &prgrm.CallStack[prgrm.CallCounter]
+			if prgrm.GetThread() != nil {
+				return nil
+			}
+			returnAddr := &prgrm.CallStack[*callCounter]
 			returnOp := returnAddr.Operator
 			returnLine := returnAddr.Line
 			returnFP := returnAddr.FramePointer
@@ -291,7 +320,7 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 			// return the stack pointer to its previous state
 			prgrm.StackPointer = call.FramePointer
 			// we'll now execute the next command
-			prgrm.CallStack[prgrm.CallCounter].Line++
+			prgrm.CallStack[*callCounter].Line++
 			// calling the actual command
 			// prgrm.CallStack[prgrm.CallCounter].ccall(prgrm)
 		}
@@ -299,13 +328,20 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 		/*
 		   continue with call operator's execution
 		*/
-		fn := call.Operator
-		expr := fn.Expressions[call.Line]
+
+		// Checking if expression is a goroutine.
+		// Current expression being executed.
+		expr := PROGRAM.GetExpr()
+
+		// fn := call.Operator
+		// expr := fn.Expressions[call.Line]
 		// if it's a native, then we just process the arguments with execNative
 		if expr.Operator == nil {
 			// then it's a declaration
 			// wiping this declaration's memory (removing garbage)
-			newCall := &prgrm.CallStack[prgrm.CallCounter]
+			var callCounter *int
+			callCounter = prgrm.GetCallCounter()
+			newCall := &prgrm.CallStack[*callCounter]
 			newFP := newCall.FramePointer
 			size := GetSize(expr.Outputs[0])
 			for c := 0; c < size; c++ {
@@ -317,20 +353,60 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 			// 	execNative(prgrm)
 			// }()
 			// call.Line++
+			
 
+			// if expr.IsGoRoutine {
+			// 	go execNative(prgrm)
+			// } else {
+			// 	execNative(prgrm)
+			// }
 			execNative(prgrm)
 			call.Line++
+			// prgrm.AdvanceThread()
+			// if PROGRAM.ThreadCount > 0 && PROGRAM.ThreadCounter < 0 {
+			// 	PROGRAM.ThreadCounter++
+			// 	// _ = prgrm.GetCall(true)
+			// }
 		} else {
 			/*
 			   It was not a native, so we need to create another call
 			   with the current expression's operator
 			*/
 			// we're going to use the next call in the callstack
-			prgrm.CallCounter++
-			if prgrm.CallCounter >= CALLSTACK_SIZE {
+			// prgrm.CallCounter++
+			var callCounter *int
+			callCounter = prgrm.GetCallCounter()
+			
+			if *callCounter >= CALLSTACK_SIZE {
 				panic(STACK_OVERFLOW_ERROR)
 			}
-			newCall := &prgrm.CallStack[prgrm.CallCounter]
+
+			if expr.IsGoRoutine {
+				thread := &PROGRAM.Threads[PROGRAM.ThreadCount]
+				thread.Terminated = false
+				PROGRAM.ThreadCount++
+				if PROGRAM.ThreadCounter < 0 {
+					PROGRAM.ThreadCounter++
+				}
+				// PROGRAM.ThreadCounter++
+
+				thread.StackFloor, thread.StackCeiling = AllocateStack(THREAD_STACK_SIZE)
+				// It's a new thread (no data has been
+				// written), so `StackPointer` is the same as the `StackFloor`
+				thread.StackPointer = thread.StackFloor
+
+				thread.CallFloor, thread.CallCeiling = AllocateCallStack(THREAD_CALLSTACK_SIZE)
+				thread.CallCounter = thread.CallFloor
+
+				
+				callCounter = prgrm.GetCallCounter()
+				// *callCounter++
+				call.Line++
+			} else {
+				// *callCounter++
+			}
+
+			newCall := &prgrm.CallStack[*callCounter]
 			// setting the new call
 			newCall.Operator = expr.Operator
 			newCall.Line = 0
@@ -342,8 +418,7 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 			// checking if enough memory in stack
 			if prgrm.StackPointer > prgrm.StackCeiling {
 				// Trying to expand current thread's stack.
-				Debug("oops")
-				prgrm.ExpandStack()
+				// prgrm.ExpandStack()
 			}
 
 			fp := call.FramePointer

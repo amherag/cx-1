@@ -945,7 +945,7 @@ func runProgram(options cxCmdFlags, cxArgs []string, sourceCode []*os.File, bcHe
 		txnCode := ExtractTransactionProgram(sPrgrm, s)
 
 		// All these HTTP requests need to be dropped in favor of calls to calls to functions
-		// from the `cli` or `api` Skycoin packages
+		// from the `cli` or `api` Skycoin packages.
 		addr := fmt.Sprintf("http://127.0.0.1:%d", options.port+420)
 		skycoinClient := api.NewClient(addr)
 		csrfToken, err := skycoinClient.CSRF()
@@ -1133,7 +1133,7 @@ func mergeBlockchainHeap(bcHeap, sPrgrm []byte) {
 		}
 	}
 	// Recalculating the heap size.
-	*PRGRM.HeapSize = len(PRGRM.Memory) - PRGRM.HeapStartsAt
+	PRGRM.HeapSize = len(PRGRM.Memory) - PRGRM.HeapStartsAt
 	txnDataLen := fullDataSegSize - GetSerializedDataSize(sPrgrm)
 	// TODO: CX chains only work with one package at the moment (in the blockchain code). That is what that "1" is for.
 	// Displacing the references to heap objects by `txnDataLen`.

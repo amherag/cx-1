@@ -1199,7 +1199,7 @@ func DebugHeap() {
 
 	w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, '.', 0)
 
-	for c := PROGRAM.HeapStartsAt + NULL_HEAP_ADDRESS_OFFSET; c < PROGRAM.HeapStartsAt+*PROGRAM.HeapPointer; {
+	for c := PROGRAM.HeapStartsAt + NULL_HEAP_ADDRESS_OFFSET; c < PROGRAM.HeapStartsAt+PROGRAM.HeapPointer; {
 		objSize := mustDeserializeI32(PROGRAM.Memory[c+MARK_SIZE+FORWARDING_ADDRESS_SIZE : c+MARK_SIZE+FORWARDING_ADDRESS_SIZE+OBJECT_SIZE])
 
 		// Setting a limit size for the object to be printed if the object is too large.

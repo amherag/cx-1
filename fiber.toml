@@ -7,7 +7,7 @@
   default_connections = []
   genesis_address_str = "23v7mT1uLpViNKZHh9aww4VChxizqKsNq4E"
   genesis_coin_volume = 10000000000.0
-  genesis_signature_str = ""
+  genesis_signature_str = "26f5e031c6a5b1312688d3ede3f28e9d518618f3c30651ea827976fb62ce54686abf3dc578a356472ee248080b3c318954c80554cd36432457e243613c49b54501"
   genesis_timestamp = 1426562704
   max_block_size = 134217728
   max_block_transactions_size = 134217728

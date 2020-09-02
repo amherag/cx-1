@@ -35,6 +35,7 @@ type CXExpression struct {
 	IsUndType       bool
 	IsBreak         bool
 	IsContinue      bool
+	IsGoRoutine     bool
 }
 
 // MakeExpression ...

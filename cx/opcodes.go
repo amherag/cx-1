@@ -428,6 +428,8 @@ const (
 	OP_REMOVE
 	OP_COPY
 
+	OP_MAKE_CHAN
+
 	OP_ASSERT
 	OP_TEST
 	OP_PANIC
@@ -1046,6 +1048,8 @@ func init() {
 	Op(OP_INSERT, "insert", opInsert, In(Slice(TYPE_UNDEFINED), Slice(TYPE_UNDEFINED)), Out(Slice(TYPE_UNDEFINED)))
 	Op(OP_REMOVE, "remove", opRemove, In(Slice(TYPE_UNDEFINED), AI32), Out(Slice(TYPE_UNDEFINED)))
 	Op(OP_COPY, "copy", opCopy, In(Slice(TYPE_UNDEFINED), Slice(TYPE_UNDEFINED)), Out(AI32))
+
+	Op(OP_MAKE_CHAN, "makeChan", opMakeChan, In(ASTR, AI32), Out(AUND))
 
 	Op(OP_ASSERT, "assert", opAssertValue, In(AUND, AUND, ASTR), Out(ABOOL))
 	Op(OP_TEST, "test", opTest, In(AUND, AUND, ASTR), nil)

@@ -130,6 +130,7 @@ type sExpression struct {
 	IsUndType       int32
 	IsBreak         int32
 	IsContinue      int32
+	IsGoRoutine     int32
 
 	FunctionOffset int32
 	PackageOffset  int32
@@ -399,6 +400,7 @@ func serializeExpression(expr *CXExpression, s *sAll) int {
 	sExpr.IsUndType = serializeBoolean(expr.IsUndType)
 	sExpr.IsBreak = serializeBoolean(expr.IsBreak)
 	sExpr.IsContinue = serializeBoolean(expr.IsContinue)
+	sExpr.IsGoRoutine = serializeBoolean(expr.IsGoRoutine)
 
 	fnName := expr.Function.Package.Name + "." + expr.Function.Name
 	if fnOff, found := s.FunctionsMap[fnName]; found {
@@ -455,10 +457,10 @@ func serializeProgram(prgrm *CXProgram, s *sAll) {
 	sPrgrm.MemoryOffset = int32(0)
 	sPrgrm.MemorySize = int32(len(PROGRAM.Memory))
 
-	sPrgrm.HeapPointer = int32(*prgrm.HeapPointer)
+	sPrgrm.HeapPointer = int32(prgrm.HeapPointer)
 	sPrgrm.StackPointer = int32(prgrm.StackPointer)
 	sPrgrm.StackSize = int32(prgrm.StackSize)
-	sPrgrm.HeapSize = int32(*prgrm.HeapSize)
+	sPrgrm.HeapSize = int32(prgrm.HeapSize)
 	sPrgrm.HeapStartsAt = int32(prgrm.HeapStartsAt)
 
 	sPrgrm.Terminated = serializeBoolean(prgrm.Terminated)
@@ -1129,6 +1131,7 @@ func dsExpression(sExpr *sExpression, s *sAll, prgrm *CXProgram) *CXExpression {
 	expr.IsUndType = dsBool(sExpr.IsUndType)
 	expr.IsBreak = dsBool(sExpr.IsBreak)
 	expr.IsContinue = dsBool(sExpr.IsContinue)
+	expr.IsGoRoutine = dsBool(sExpr.IsGoRoutine)
 
 	expr.Function = getFunction(sExpr, s, prgrm)
 	expr.Package = prgrm.Packages[sExpr.PackageOffset]
@@ -1176,10 +1179,10 @@ func initDeserialization(prgrm *CXProgram, s *sAll) {
 	prgrm.CallStack = make([]CXCall, CALLSTACK_SIZE)
 	prgrm.HeapStartsAt = int(s.Program.HeapStartsAt)
 	heapPointer := int(s.Program.HeapPointer)
-	prgrm.HeapPointer = &heapPointer
+	prgrm.HeapPointer = heapPointer
 	prgrm.StackSize = int(s.Program.StackSize)
 	heapSize := int(s.Program.HeapSize)
-	prgrm.HeapSize = &heapSize
+	prgrm.HeapSize = heapSize
 	prgrm.BCPackageCount = int(s.Program.BCPackageCount)
 	prgrm.Version = dsName(s.Program.VersionOffset, s.Program.VersionSize, s)
 

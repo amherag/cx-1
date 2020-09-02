@@ -75,6 +75,8 @@
                         PLUSEQ MINUSEQ MULTEQ DIVEQ REMAINDEREQ EXPEQ
                         LEFTSHIFTEQ RIGHTSHIFTEQ BITANDEQ BITXOREQ BITOREQ
 
+			GO
+
                         DEC_OP INC_OP PTR_OP LEFT_OP RIGHT_OP
                         GE_OP LE_OP EQ_OP NE_OP AND_OP OR_OP
                         ADD_ASSIGN AND_ASSIGN LEFT_ASSIGN MOD_ASSIGN
@@ -84,7 +86,7 @@
                         I8 I16 I32 I64
                         STR
                         UI8 UI16 UI32 UI64
-                        UNION ENUM CONST CASE DEFAULT SWITCH BREAK CONTINUE
+                        UNION ENUM CONST CASE DEFAULT SWITCH BREAK CONTINUE CHAN
                         TYPE
                         
                         /* Types */
@@ -571,6 +573,14 @@ type_specifier:
                 { $$ = TYPE_UI32 }
         |       UI64
                 { $$ = TYPE_UI64 }
+	|	CHAN type_specifier
+		{
+			switch $2 {
+			case TYPE_I32:
+				
+			}
+			$$ = $2
+                }
                 ;
 
 
@@ -851,6 +861,10 @@ primary_expression:
         /*         { */
 	/* 		$$ = PrimaryStructLiteral($1, $3) */
         /*         } */
+	/* |	GO postfix_expression */
+	/* 	{ */
+	/* 		$$ = nil */
+	/* 	} */
 	|	FUNC LPAREN RPAREN
 		{
 			$$ = nil
@@ -969,6 +983,11 @@ argument_expression_list:
 
 unary_expression:
                 postfix_expression
+	|	GO unary_expression
+		{
+			$2[len($2) - 1].IsGoRoutine = true
+			$$ = $2
+		}
 	|       INC_OP unary_expression
                 {
 			// TODO

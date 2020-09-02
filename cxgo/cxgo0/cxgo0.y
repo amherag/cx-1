@@ -88,6 +88,8 @@
                         PLUSEQ MINUSEQ MULTEQ DIVEQ REMAINDEREQ EXPEQ
                         LEFTSHIFTEQ RIGHTSHIFTEQ BITANDEQ BITXOREQ BITOREQ
 
+			GO
+
                         DEC_OP INC_OP PTR_OP LEFT_OP RIGHT_OP
                         GE_OP LE_OP EQ_OP NE_OP AND_OP OR_OP
                         ADD_ASSIGN AND_ASSIGN LEFT_ASSIGN MOD_ASSIGN
@@ -97,7 +99,7 @@
                         I8 I16 I32 I64
                         STR
                         UI8 UI16 UI32 UI64
-                        UNION ENUM CONST CASE DEFAULT SWITCH BREAK CONTINUE
+                        UNION ENUM CONST CASE DEFAULT SWITCH BREAK CONTINUE CHAN
                         TYPE
                         
                         /* Types */
@@ -138,6 +140,7 @@
 
                         // for struct literals
 %right                  IDENTIFIER LBRACE
+%left                   GO
 
 //%start
                         
@@ -425,15 +428,8 @@ type_specifier:
                 { $$ = TYPE_UI32 }
         |       UI64
                 { $$ = TYPE_UI64 }
-	/* |       struct_or_union_specifier */
-        /*         { */
-        /*             $$ = "struct" */
-        /*         } */
-	/* |       enum_specifier */
-        /*         { */
-        /*             $$ = "enum" */
-        /*         } */
-	/* |       TYPEDEF_NAME // check */
+	|	CHAN type_specifier
+		{ $$ = $2}
                 ;
 
 
@@ -580,6 +576,7 @@ argument_expression_list:
 
 unary_expression:
                 postfix_expression
+	|	GO unary_expression
 	|       INC_OP unary_expression
 	|       DEC_OP unary_expression
 	|       unary_operator unary_expression // check

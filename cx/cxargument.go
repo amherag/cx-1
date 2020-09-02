@@ -25,6 +25,7 @@ type CXArgument struct {
 	CustomType            *CXStruct
 	Package               *CXPackage
 	IsSlice               bool
+	IsChannel             bool
 	IsArray               bool
 	IsArrayFirst          bool // and then dereference
 	IsPointer             bool

@@ -46,7 +46,7 @@ func opIdentity(prgrm *CXProgram) {
 }
 
 func opJmp(prgrm *CXProgram) {
-	call := prgrm.GetCall()
+	call := prgrm.GetCall(false)
 	expr := prgrm.GetExpr()
 	fp := prgrm.GetFramePointer()
 

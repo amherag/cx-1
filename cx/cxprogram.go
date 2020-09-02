@@ -31,8 +31,8 @@ type CXProgram struct {
 	Inputs         []*CXArgument // OS input arguments
 	Outputs        []*CXArgument // outputs to the OS
 	Memory         []byte        // Used when running the program
-	HeapSize       *int          // This field stores the size of a CX program's heap
-	HeapPointer    *int          // At what offset a CX program can insert a new object to the heap
+	HeapSize       int          // This field stores the size of a CX program's heap
+	HeapPointer    int          // At what offset a CX program can insert a new object to the heap
 	StackSize      int           // This field stores the size of a CX program's stack
 	HeapStartsAt   int           // Offset at which the heap starts in a CX program's memory
 	StackPointer   int           // At what byte the current stack frame is
@@ -40,21 +40,38 @@ type CXProgram struct {
 	StackCeiling   int           // After this point, the stack for this thread needs to be expanded
 	CallStack      []CXCall      // Collection of function calls
 	CallCounter    int           // What function call is the currently being executed in the CallStack
+	CallFloor      int           // Main thread of execution's CallStack starting index.
+	CallCeiling    int           // Main thread of execution's CallStack ending index.
 	Terminated     bool          // Utility field for the runtime. Indicates if a CX program has already finished or not.
 	BCPackageCount int           // In case of a CX chain, how many packages of this program are part of blockchain code.
 	Version        string        // CX version used to build this CX program.
 
-	Threads        []CXProgram  // 
+	Threads        []CXThread    // Threads created via goroutines.
+	ThreadCounter  int           // What `Thread` are we executing right now.
+	ThreadCount    int           // How many active threads do we have.
 
 	// Used by the REPL and parser
 	CurrentPackage *CXPackage // Represents the currently active package in the REPL or when parsing a CX file.
 }
 
-// CXCall ...
+// CXThread represents a thread in a CX multi-threaded application.
+type CXThread struct {
+	StackPointer  int   // At what byte the thread's current stack frame is.
+	StackFloor    int   // Thread's stack starts at this byte.
+	StackCeiling  int   // After this point, the stack for this thread needs to be expanded.
+	CallCounter   int   // What function call is the currently being executed in the main `CXProgram`'s CallStack.
+	CallFloor     int   // Main thread of execution's CallStack starting index.
+	CallCeiling   int   // Main thread of execution's CallStack ending index.
+	Terminated    bool  // Has this thread finished or not.
+}
+
+// CXCall represents a call in a `CXProgram`'s `CallStack`. It is used
+// to know what's the current `CXFunction` that has to be executed.
 type CXCall struct {
 	Operator     *CXFunction // What CX function will be called when running this CXCall in the runtime
 	Line         int         // What line in the CX function is currently being executed
 	FramePointer int         // Where in the stack is this function call's local variables stored
+	// ReturnCall   int         // Index of the call to return to
 }
 
 // MakeProgram ...
@@ -62,25 +79,28 @@ func MakeProgram() *CXProgram {
 	minHeapSize := minHeapSize()
 	heapPointer := NULL_HEAP_ADDRESS_OFFSET
 	newPrgrm := &CXProgram{
-		Packages:     make([]*CXPackage, 0),
-		CallStack:    make([]CXCall, CALLSTACK_SIZE),
-		Memory:       make([]byte, STACK_SIZE+minHeapSize),
-		StackSize:    STACK_SIZE,
-		StackCeiling: THREAD_STACK_SIZE,
-		HeapSize:     &minHeapSize,
-		HeapPointer:  &heapPointer, // We can start adding objects to the heap after the NULL (nil) bytes.
-		Threads:      make([]CXProgram, THREAD_POOL_SIZE),
+		Packages:      make([]*CXPackage, 0),
+		CallStack:     make([]CXCall, CALLSTACK_SIZE),
+		Memory:        make([]byte, STACK_SIZE+minHeapSize),
+		StackSize:     STACK_SIZE,
+		StackCeiling:  THREAD_STACK_SIZE,
+		CallFloor:     0,
+		CallCeiling:   THREAD_CALLSTACK_SIZE,
+		HeapSize:      minHeapSize,
+		HeapPointer:   heapPointer, // We can start adding objects to the heap after the NULL (nil) bytes.
+		Threads:       make([]CXThread, THREAD_POOL_SIZE),
+		ThreadCounter: -1, // No threads at the beginning.
 	}
 
 	for _, thread := range newPrgrm.Threads {
-		thread.Packages = newPrgrm.Packages
-		thread.Inputs = newPrgrm.Inputs
-		thread.Outputs = newPrgrm.Outputs
-		// Different `CallStack` than to the main thread.
-		thread.CallStack = make([]CXCall, CALLSTACK_SIZE)
-		thread.Memory = newPrgrm.Memory
-		thread.HeapSize = newPrgrm.HeapSize
-		thread.HeapPointer = newPrgrm.HeapPointer
+		// thread.Packages = newPrgrm.Packages
+		// thread.Inputs = newPrgrm.Inputs
+		// thread.Outputs = newPrgrm.Outputs
+		// // Different `CallStack` than to the main thread.
+		// thread.CallStack = make([]CXCall, CALLSTACK_SIZE)
+		// thread.Memory = newPrgrm.Memory
+		// thread.HeapSize = newPrgrm.HeapSize
+		// thread.HeapPointer = newPrgrm.HeapPointer
 		thread.Terminated = true
 	}
 
@@ -288,14 +308,70 @@ func (prgrm *CXProgram) GetFunction(fnName string, pkgName string) (*CXFunction,
 
 }
 
-// GetCall returns the current CXCall
-func (prgrm *CXProgram) GetCall() *CXCall {
+// AdvanceThread moves `prgrm.ThreadCounter` to point to the next thread.
+func (prgrm *CXProgram) AdvanceThread() {
+	if prgrm.ThreadCount > 0 {
+		prgrm.ThreadCounter++
+		if prgrm.ThreadCounter >= prgrm.ThreadCount {
+			// Resetting to main thread.
+			prgrm.ThreadCounter = -1
+		}
+	}
+}
+
+// GetCall returns the current CXCall. If `isWrite` is true, this means that
+// we want to modify `prgrm.ThreadCounter`. If not, it means we just want to
+// do a read operation on what call we're dealing with at the moment.
+func (prgrm *CXProgram) GetCall(isWrite bool) *CXCall {
+	if isWrite {
+		prgrm.AdvanceThread()
+	}
+	// if isWrite && prgrm.ThreadCount > 0 {
+	// 	prgrm.ThreadCounter++
+	// 	if prgrm.ThreadCounter >= prgrm.ThreadCount {
+	// 		// Resetting to main thread.
+	// 		prgrm.ThreadCounter = -1
+	// 	}
+	// }
+	
+	// Checking if we'll use a thread's `CallCounter`. ThreadCounter == -1 means main thread.
+	if prgrm.ThreadCounter > -1 {
+		return &prgrm.CallStack[prgrm.Threads[prgrm.ThreadCounter].CallCounter]
+	}
+
 	return &prgrm.CallStack[prgrm.CallCounter]
+}
+
+// GetCallCounter returns the call counter of the currently active thread.
+func (prgrm *CXProgram) GetCallCounter() *int {
+	// Checking if we'll use a thread's `CallCounter`. ThreadCounter == -1 means main thread.
+	if prgrm.ThreadCounter > -1 {
+		return &prgrm.Threads[prgrm.ThreadCounter].CallCounter
+	}
+	return &prgrm.CallCounter
+}
+
+// GetThread returns the thread currently being executed.
+func (prgrm *CXProgram) GetThread() *CXThread {
+	// Checking if we'll use a thread's `CallCounter`. ThreadCounter == -1 means main thread.
+	if prgrm.ThreadCounter > -1 && prgrm.ThreadCount > 0 {
+		return &prgrm.Threads[prgrm.ThreadCounter]
+	}
+	return nil
+}
+
+// GetThreadCallFloor returns the call floor of the thread currently being executed.
+func (prgrm *CXProgram) GetThreadCallFloor() int {
+	// Checking if we'll use a thread's `CallCounter`. ThreadCounter == -1 means main thread.
+	if prgrm.ThreadCounter > -1 {
+		return prgrm.Threads[prgrm.ThreadCounter].CallFloor
+	}
+	return prgrm.CallFloor
 }
 
 // GetExpr returns the current CXExpression
 func (prgrm *CXProgram) GetExpr() *CXExpression {
-	call := prgrm.GetCall()
+	call := prgrm.GetCall(false)
 	return call.Operator.Expressions[call.Line]
 }
 
@@ -306,7 +382,7 @@ func (prgrm *CXProgram) GetOpCode() int {
 
 // GetFramePointer returns the current frame pointer
 func (prgrm *CXProgram) GetFramePointer() int {
-	return prgrm.GetCall().FramePointer
+	return prgrm.GetCall(false).FramePointer
 }
 
 // ----------------------------------------------------------------

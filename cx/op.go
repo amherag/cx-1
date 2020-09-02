@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/SkycoinProject/skycoin/src/cipher/encoder"
+	"github.com/jinzhu/copier"
 )
 
 // GetSize ...
@@ -618,7 +619,7 @@ func MarkAndCompact(prgrm *CXProgram) {
 	}
 
 	// Relocation of live objects.
-	for c := prgrm.HeapStartsAt + NULL_HEAP_ADDRESS_OFFSET; c < prgrm.HeapStartsAt+*prgrm.HeapPointer; {
+	for c := prgrm.HeapStartsAt + NULL_HEAP_ADDRESS_OFFSET; c < prgrm.HeapStartsAt+prgrm.HeapPointer; {
 		objSize := mustDeserializeI32(prgrm.Memory[c+MARK_SIZE+FORWARDING_ADDRESS_SIZE : c+MARK_SIZE+FORWARDING_ADDRESS_SIZE+OBJECT_SIZE])
 
 		if prgrm.Memory[c] == 1 {
@@ -640,7 +641,7 @@ func MarkAndCompact(prgrm *CXProgram) {
 		c += int(objSize)
 	}
 
-	*prgrm.HeapPointer = int(faddr)
+	prgrm.HeapPointer = int(faddr)
 }
 
 // ResizeMemory ...
@@ -650,7 +651,7 @@ func ResizeMemory(prgrm *CXProgram, newMemSize int, isExpand bool) {
 		newMemSize = MAX_HEAP_SIZE
 	}
 
-	if newMemSize == *prgrm.HeapSize {
+	if newMemSize == prgrm.HeapSize {
 		// Then we're at the limit; we can't expand anymore.
 		// We can only hope that the free memory is enough for the CX program to continue running.
 		return
@@ -658,28 +659,28 @@ func ResizeMemory(prgrm *CXProgram, newMemSize int, isExpand bool) {
 
 	if isExpand {
 		// Adding bytes to reach a heap equal to `newMemSize`.
-		prgrm.Memory = append(prgrm.Memory, make([]byte, newMemSize-*prgrm.HeapSize)...)
-		*prgrm.HeapSize = newMemSize
+		prgrm.Memory = append(prgrm.Memory, make([]byte, newMemSize-prgrm.HeapSize)...)
+		prgrm.HeapSize = newMemSize
 	} else {
 		// Removing bytes to reach a heap equal to `newMemSize`.
 		prgrm.Memory = append([]byte(nil), prgrm.Memory[:prgrm.HeapStartsAt+newMemSize]...)
-		*prgrm.HeapSize = newMemSize
+		prgrm.HeapSize = newMemSize
 	}
 }
 
 // AllocateSeq allocates memory in the heap
 func AllocateSeq(size int) (offset int) {
 	// Current object trying to be allocated would use this address.
-	addr := *PROGRAM.HeapPointer
+	addr := PROGRAM.HeapPointer
 	// Next object to be allocated will use this address.
 	newFree := addr + size
 
 	// Checking if we can allocate the entirety of the object in the current heap.
-	if newFree > *PROGRAM.HeapSize {
+	if newFree > PROGRAM.HeapSize {
 		// It does not fit, so calling garbage collector.
 		MarkAndCompact(PROGRAM)
 		// Heap pointer got moved by GC and recalculate these variables based on the new pointer.
-		addr = *PROGRAM.HeapPointer
+		addr = PROGRAM.HeapPointer
 		newFree = addr + size
 
 		// If the new heap pointer exceeds `MAX_HEAP_SIZE`, there's nothing left to do.
@@ -694,7 +695,7 @@ func AllocateSeq(size int) (offset int) {
 		// too frequently.
 
 		// Calculating free heap memory percentage.
-		usedPerc := float32(newFree) / float32(*PROGRAM.HeapSize)
+		usedPerc := float32(newFree) / float32(PROGRAM.HeapSize)
 		freeMemPerc := 1.0 - usedPerc
 
 		// Then we have less than MIN_HEAP_FREE_RATIO memory left. Expand!
@@ -717,12 +718,31 @@ func AllocateSeq(size int) (offset int) {
 		}
 	}
 
-	*PROGRAM.HeapPointer = newFree
+	PROGRAM.HeapPointer = newFree
 
 	// Returning absolute memory address (not relative to where heap starts at).
 	// Above this point we were performing all operations taking into
 	// consideration only heap offsets.
 	return addr + PROGRAM.HeapStartsAt
+}
+
+// CompactThreads reorganizes the references stored on
+// `PROGRAM.Threads`, so the first `PROGRAM.ThreadCount` - 1 `CXThread`s
+// are the currently alive threads in the CX runtime.
+func (prgrm *CXProgram) CompactThreads() {
+	prgrm.ThreadCount--
+	foundDeadThread := false
+	for i, thread := range prgrm.Threads {
+		if thread.Terminated {
+			foundDeadThread = true
+		}
+		// Removing dead thread.
+		// If it's the last one, we can leave it as it is.
+		if foundDeadThread && i < len(prgrm.Threads) - 1 {
+			// Copying next thread to previous thread
+			copier.Copy(&prgrm.Threads[i], prgrm.Threads[i+1])
+		}
+	}
 }
 
 // CompactStack takes the main `prgrm` thread and all of its child threads
@@ -731,24 +751,37 @@ func AllocateSeq(size int) (offset int) {
 func (prgrm *CXProgram) CompactStack() int {
 	fullStackCeiling := 0
 
-	ceiling := PROGRAM.StackCeiling
-	floor := PROGRAM.StackFloor
+	// ceiling := PROGRAM.StackCeiling
+	// floor := PROGRAM.StackFloor
 
-	for _, thread := range prgrm.Threads {
+	// for _, thread := range prgrm.Threads {
 		
-	}
+	// }
+
+	return fullStackCeiling
+}
+
+// CompactCallStack removes dead call stack segments previously used
+// by threads that have already finished. This process should
+// rarely occur, as CX tries first to re-use call stack segments not being used anymore.
+func (prgrm *CXProgram) CompactCallStack() int {
+	fullStackCeiling := 0
+
+	// ceiling := PROGRAM.StackCeiling
+	// floor := PROGRAM.StackFloor
+
+	// for _, thread := range prgrm.Threads {
+		
+	// }
 
 	return fullStackCeiling
 }
 
 // ExpandStack allocates a new stack and copies the bytes from the
-// old stack. Returns new frame pointer, stack floor and a new stack
+// old stack. Returns new stack pointer, stack floor and a new stack
 // ceiling.
-func (prgrm *CXProgram) ExpandStack() {
-	prevFP := prgrm.StackPointer
-	prevFloor := prgrm.StackFloor
-	prevCeiling := prgrm.StackCeiling
-	newSize := (prevCeiling - PrevFloor) * 2
+func ExpandStack(prevFP, prevFloor, prevCeiling int) (int, int, int) {
+	newSize := (prevCeiling - prevFloor) * 2
 	newFloor, newCeiling := AllocateStack(newSize)
 
 	// Copying old stack to new stack.
@@ -757,9 +790,7 @@ func (prgrm *CXProgram) ExpandStack() {
 	}
 
 	// Setting new stack.
-	prgrm.StackPointer = prevFP+(newFloor-prevFloor)
-	prgrm.StackFloor = newFloor
-	prgrm.StackCeiling = newCeiling
+	return prevFP+(newFloor-prevFloor), newFloor, newCeiling
 }
 
 // AllocateStack finds a position in the stack segment where a new
@@ -778,6 +809,30 @@ func AllocateStack(wantedSize int) (int, int) {
 		// If the new stack ceiling exceeds `STACK_SIZE`, there's nothing left to do.
 		panic(STACK_OVERFLOW_ERROR)
 	}
+
+	// Returning new stack of 8 kilobytes.
+	return ceiling, ceiling + wantedSize
+}
+
+// AllocateCallStack finds a position in the main `CXProgram`'s `CallStack` where a new
+// CallStack can be allocated for a new thread.
+func AllocateCallStack(wantedSize int) (int, int) {
+	ceiling := PROGRAM.CallCeiling
+	// Debug("ceilingBefore", ceiling)
+	for _, thread := range PROGRAM.Threads {
+		if thread.CallCeiling > ceiling && !thread.Terminated {
+			ceiling = thread.CallCeiling
+		}
+	}
+
+	// Checking if we need to re-allocate call stacks.
+	if ceiling + wantedSize > CALLSTACK_SIZE {
+		PROGRAM.CompactCallStack()
+		// If the new stack ceiling exceeds `STACK_SIZE`, there's nothing left to do.
+		panic(STACK_OVERFLOW_ERROR)
+	}
+
+	// Debug("ceilingAfter", ceiling)
 
 	// Returning new stack of 8 kilobytes.
 	return ceiling, ceiling + wantedSize

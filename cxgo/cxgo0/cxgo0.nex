@@ -23,6 +23,7 @@
 /case/                    { return f(CASE) }
 /const/                   { return f(CONST) }
 /continue/                { return f(CONTINUE) }
+/chan/                    { return f(CHAN) }
 /default/                 { return f(DEFAULT) }
 /else/                    { return f(ELSE) }
 /enum/                    { return f(ENUM) }
@@ -116,6 +117,7 @@
 /goto/                    { return f(GOTO)       }
 /if/                      { return f(IF)         }
 /for/                     { return f(FOR)        }
+/go/                      { return f(GO)         }
 /func/                    { return f(FUNC)       }
 /clauses/                 { return f(CLAUSES)    }
 /def/                     { return f(DEF)        }
