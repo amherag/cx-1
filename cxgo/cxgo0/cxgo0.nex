@@ -24,6 +24,7 @@
 /const/                   { return f(CONST) }
 /continue/                { return f(CONTINUE) }
 /chan/                    { return f(CHAN) }
+/<-/                      { return f(RECEIVE) }
 /default/                 { return f(DEFAULT) }
 /else/                    { return f(ELSE) }
 /enum/                    { return f(ENUM) }

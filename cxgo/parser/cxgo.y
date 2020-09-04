@@ -86,7 +86,7 @@
                         I8 I16 I32 I64
                         STR
                         UI8 UI16 UI32 UI64
-                        UNION ENUM CONST CASE DEFAULT SWITCH BREAK CONTINUE CHAN
+                        UNION ENUM CONST CASE DEFAULT SWITCH BREAK CONTINUE CHAN RECEIVE
                         TYPE
                         
                         /* Types */
@@ -510,6 +510,13 @@ declaration_specifiers:
                 {
 			$$ = DeclarationSpecifiers($3, []int{0}, DECL_SLICE)
                 }
+        |	CHAN declaration_specifiers
+		{
+			// We're setting both IsChannel and IsSlice. In many cases the
+			// argument will behave as a Slice. For those cases where we
+			// need to make a distinction, we can use IsChannel.
+			$$ = DeclarationSpecifiers($2, nil, DECL_CHANNEL)
+		}
         |       type_specifier
                 {
 			$$ = DeclarationSpecifiersBasic($1)
@@ -573,14 +580,7 @@ type_specifier:
                 { $$ = TYPE_UI32 }
         |       UI64
                 { $$ = TYPE_UI64 }
-	|	CHAN type_specifier
-		{
-			switch $2 {
-			case TYPE_I32:
-				
-			}
-			$$ = $2
-                }
+
                 ;
 
 
@@ -1010,6 +1010,7 @@ unary_operator:
 	|       ADD_OP
 	|       SUB_OP
 	|       NEG_OP
+	|	RECEIVE
                 ;
 
 multiplicative_expression:
@@ -1194,6 +1195,7 @@ assignment_operator:
 	|       AND_ASSIGN
 	|       XOR_ASSIGN
 	|       OR_ASSIGN
+	|	RECEIVE
                 ;
 
 expression:     assignment_expression
