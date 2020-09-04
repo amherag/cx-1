@@ -651,6 +651,20 @@ func GetSliceData(offset int32, sizeofElement int) []byte {
 	return nil
 }
 
+// AllocateLenCapObject allocates an object on heap that uses a length
+// and a capacity, such as a slice or a channel.
+func AllocateLenCapObject(length, capacity int32, sizeofElement int) int32 {
+	var outputObjectSize = OBJECT_HEADER_SIZE + SLICE_HEADER_SIZE + capacity*int32(sizeofElement)
+	outputSliceOffset := int32(AllocateSeq(int(outputObjectSize)))
+	WriteMemI32(GetObjectHeader(outputSliceOffset)[5:9], 0, outputObjectSize)
+
+	outputSliceHeader := GetSliceHeader(outputSliceOffset)
+	WriteMemI32(outputSliceHeader[0:4], 0, capacity)
+	WriteMemI32(outputSliceHeader[4:8], 0, length)
+
+	return outputSliceOffset
+}
+
 // SliceResizeEx does the logic required by `SliceResize`. It is separated because some other functions might have access to the offsets of the slices, but not the `CXArgument`s.
 func SliceResizeEx(outputSliceOffset int32, count int32, sizeofElement int) int {
 	if count < 0 {
@@ -673,13 +687,7 @@ func SliceResizeEx(outputSliceOffset int32, count int32, sizeofElement int) int 
 		} else {
 			newCap *= 2
 		}
-		var outputObjectSize = OBJECT_HEADER_SIZE + SLICE_HEADER_SIZE + newCap*int32(sizeofElement)
-		outputSliceOffset = int32(AllocateSeq(int(outputObjectSize)))
-		WriteMemI32(GetObjectHeader(outputSliceOffset)[5:9], 0, outputObjectSize)
-
-		outputSliceHeader = GetSliceHeader(outputSliceOffset)
-		WriteMemI32(outputSliceHeader[0:4], 0, newCap)
-		WriteMemI32(outputSliceHeader[4:8], 0, newLen)
+		outputSliceOffset = AllocateLenCapObject(newLen, newCap, sizeofElement)
 	}
 
 	return int(outputSliceOffset)

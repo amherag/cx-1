@@ -795,17 +795,21 @@ func opRead(prgrm *CXProgram) {
 // func opMake...
 
 func opMakeChan(prgrm *CXProgram) {
-	// ->
-	// <-
-	// make(chan string, 3)
-	// chan
 	expr := prgrm.GetExpr()
 	fp := prgrm.GetFramePointer()
 
 	inp1, inp2, out1 := expr.Inputs[0], expr.Inputs[1], expr.Outputs[0]
 
-	channel := GetAssignmentElement(out1)
+	_ = inp1
+
+	// channel := GetAssignmentElement(out1)
+	// Channel type.
+	// typ := ReadStr(fp, inp1)
+	// Capacity.
 	cap := ReadI32(fp, inp2)
+
+	// We're creating a new "slice".
+	outputSliceOffset := AllocateLenCapObject(0, cap, 4)
 
 	// var inputSliceLen int32
 	// inputSliceOffset := GetSliceOffset(fp, inp1)
@@ -814,20 +818,20 @@ func opMakeChan(prgrm *CXProgram) {
 	// }
 
 	// Preparing slice in case more memory is needed for the new element.
-	outputSliceOffset := SliceAppendResize(fp, out1, inp1, inp2.Size)
+	// outputSliceOffset := SliceAppendResize(fp, out1, nil, inp2.Size)
 
 	// We need to update the address of the output and input, as the final offsets
 	// could be on the heap and they could have been moved by the GC.
 	outputSlicePointer := GetFinalOffset(fp, out1)
 
-	if inp2.Type == TYPE_STR || inp2.Type == TYPE_AFF {
-		var obj [4]byte
-		WriteMemI32(obj[:], 0, int32(GetStrOffset(fp, inp2)))
-		SliceAppendWrite(outputSliceOffset, obj[:], inputSliceLen)
-	} else {
-		obj := ReadMemory(GetFinalOffset(fp, inp2), inp2)
-		SliceAppendWrite(outputSliceOffset, obj, inputSliceLen)
-	}
+	// if inp2.Type == TYPE_STR || inp2.Type == TYPE_AFF {
+	// 	var obj [4]byte
+	// 	WriteMemI32(obj[:], 0, int32(GetStrOffset(fp, inp2)))
+	// 	SliceAppendWrite(outputSliceOffset, obj[:], inputSliceLen)
+	// } else {
+	// 	obj := ReadMemory(GetFinalOffset(fp, inp2), inp2)
+	// 	SliceAppendWrite(outputSliceOffset, obj, inputSliceLen)
+	// }
 
-	WriteI32(outputSlicePointer, outputSliceOffset)
+	WriteI32(outputSlicePointer, int32(outputSliceOffset))
 }

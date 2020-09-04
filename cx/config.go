@@ -123,6 +123,7 @@ const (
 	DECL_INDEXING        // 5
 	DECL_BASIC           // 6
 	DECL_FUNC            // 7
+	DECL_CHANNEL         // 8
 )
 
 // create a new scope or return to the previous scope

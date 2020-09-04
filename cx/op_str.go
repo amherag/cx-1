@@ -204,6 +204,8 @@ func opStrSubstr(prgrm *CXProgram) {
 	begin := ReadI32(fp, expr.Inputs[1])
 	end := ReadI32(fp, expr.Inputs[2])
 
+	Debug("str", str, begin, end)
+
 	WriteString(fp, str[begin:end], expr.Outputs[0])
 }
 

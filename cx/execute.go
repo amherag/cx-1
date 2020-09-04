@@ -353,13 +353,7 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 			// 	execNative(prgrm)
 			// }()
 			// call.Line++
-			
 
-			// if expr.IsGoRoutine {
-			// 	go execNative(prgrm)
-			// } else {
-			// 	execNative(prgrm)
-			// }
 			execNative(prgrm)
 			call.Line++
 			// prgrm.AdvanceThread()
@@ -403,7 +397,7 @@ func (call *CXCall) ccall(prgrm *CXProgram) error {
 				// *callCounter++
 				call.Line++
 			} else {
-				// *callCounter++
+				*callCounter++
 			}
 
 			newCall := &prgrm.CallStack[*callCounter]
